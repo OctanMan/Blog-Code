@@ -118,13 +118,19 @@ namespace TinyRocketGames.Perspective.VisibilityShader
 
         void Update()
         {
+            //The AsyncTextureReader native plugin only supports DirectX at present so we'll simply go by platform until that changes
+#if UNITY_STANDALONE_WIN
             GetComputeBufferWithAsyncPlugin();
+#else
+            GetComputeBuffer();
+#endif
         }
 
         /// <summary>
         /// The main method using a Native Plugin for async buffer retrieval from the GPU.
         /// This should enable a more consitent frame-rate as the CPU does not need to block on the main thread waiting for data back from the GPU.
-        /// Currently supports DirectX 11 only but the source is available so developing for more targets is possible:
+        /// Several additional frames of latency is the trade-off versus the synchronous method but the consistency could mitigate this if the framerate is high.
+        /// The plugin currently supports DirectX 11 only but the source is available so developing for more targets is possible:
         /// https://github.com/SlightlyMad/AsyncTextureReader
         /// </summary>
         private void GetComputeBufferWithAsyncPlugin()
@@ -350,7 +356,7 @@ namespace TinyRocketGames.Perspective.VisibilityShader
                 return true;
         }
 
-        #region Static Register/Deregister Plumbing
+#region Static Register/Deregister Plumbing
         internal static void Register(PerspectiveCamera cam)
         {
             if (!camerasToRegister.Contains(cam))
@@ -386,17 +392,26 @@ namespace TinyRocketGames.Perspective.VisibilityShader
                 updateSets = true;
             }
         }
-        #endregion
+#endregion
 
         //Old method to get data back from the GPU without the native plugin. Here in case we need to target non-DX11 builds although that needs conditional compilation setup
-        private IEnumerator GetComputeBufferWithYieldOnly()
+        private void GetComputeBuffer()
         {
-            yield return new WaitForEndOfFrame();
-
             //The built-in Unity method is synchronous, can cause significant frame-time spikes when GPU and CPU are out of sync
             computeBuffer.GetData(computeBufferData);
 
             ProcessComputeBufferData();
+
+            //Change the ComputeBuffer if a new buffer size has been set
+            if (updateComputeBuffer)
+                SetComputeBuffer();
+
+            //Update the sets with objects and cameras to be de/registered
+            if (updateSets)
+                UpdateRegisteredSets();
+
+            //Queue a request to reset the computeBufferData
+            ResetComputeBufferData();
         }
     }
 }

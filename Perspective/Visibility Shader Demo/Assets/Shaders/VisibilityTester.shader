@@ -51,7 +51,7 @@ Shader "Perspective/Visibility Tester"
 			#include "UnityCG.cginc"
 
 			//UAV ComputeBuffer
-			RWStructuredBuffer<int> compute : register(u4);
+			RWStructuredBuffer<int> _ComputeBuffer : register(u4);
 			//Depth Texture of the currently rendering camera
 			sampler2D _CameraDepthTexture;
 			//The index of the perspective object, set per-instance via MaterialPropertyBlock's
@@ -85,13 +85,12 @@ Shader "Perspective/Visibility Tester"
 				//Linear Depth of this fragment from our vertex input variable
 				float ffp = Linear01Depth(i.pos.z).r;
 				
-				//Important to let this be < 0 (it's a floating point thing methinks)
-				float diff = clamp(ffp - fts, -0.1, 1.0);
-
-				if (diff <= 0 && _CameraIsActive == 1)
+				//Based on the clipping planes of near = 0 and far = 1, if this fragment's linear depth is less than or equal, it is closer
+				//Although be aware of this: https://docs.unity3d.com/Manual/UpgradeGuide55.html
+				if (ffp <= fts && _CameraIsActive == 1)
 				{
 					//Index is derrived from the Perspective Object Index offset by the currently active Camera Index
-					compute[_PerspectiveObjIndex + _CameraIndexOffset] = 1;
+					_ComputeBuffer[_PerspectiveObjIndex + _CameraIndexOffset] = 1;
 				}
 
 				//Clipping can be set to cull the color output. Toggle to help debugging in the Editor
@@ -99,7 +98,7 @@ Shader "Perspective/Visibility Tester"
 					clip(-1);
 				#endif
 				
-				//Otherwise return a colour representation of the fragment depth value
+				//Otherwise return a color representation of the fragment depth value
 				return i.pos.z;
 				}
 				ENDCG
